@@ -1,0 +1,15 @@
+#Visual Studio stuff
+Buffer/
+.vs
+.vs/
+__vm/
+*.sln
+*.skb
+*.vcxproj
+*.vcxproj.*
+Config.AE.h
+Backup.bat
+
+# C extensions
+*.so
+
