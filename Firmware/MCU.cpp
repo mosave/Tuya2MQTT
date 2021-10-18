@@ -3,15 +3,6 @@
 #include "MCU.h"
 #include "Comms.h"
 
-enum MCUPhase {
-  HeartBeat,
-  DeviceInfo,
-  WorkingMode,
-  WorkingStatus,
-  Normal
-};
-
-bool mcuReversed = false;
 MotorState mcuMotorState = Idle;
 MotorState mcuDirection = Closing;
 int mcuPosition = false;
@@ -23,7 +14,7 @@ int mcuCommandSet = 0;
 unsigned long mcuLastRead = 0;
 unsigned long mcuHeartBeat = 0;
 unsigned long mcuLastAlive = 0;
-MCUPhase mcuPhase = (MCUPhase)0;
+int mcuPhase = 0;
 
 #ifdef USE_SOFT_SERIAL
 	#include <SoftwareSerial.h>
@@ -37,15 +28,17 @@ void mcuLogData( const char* prefix ) {
 #ifdef MCU_DEBUG
   if( mcuLen==0 ) return;
   char s[255];
-  char hex[4];
+  char s1[48];
   strcpy( s, "< ");
   if( (prefix != NULL) && (strlen(prefix)>0) ) strcat(strcat( s, prefix)," ");
 
   for(int i=0; i<mcuLen; i++ ) {
-    sprintf( hex, "%02x", mcuData[i]);
+    sprintf( s1, "%02x", mcuData[i]);
     if( i == mcuLen-1 ) strcat(s, ":");
-    strcat( s, hex);
+    strcat( s, s1);
   }
+  sprintf(s1, " phs=%d,pos=%d,state=%d,dir=%d,cs=%d", mcuPhase, mcuPosition, mcuMotorState, mcuDirection, mcuCommandSet);
+  strcat(s, s1);
   aePrintln(s);
   mqttPublish("Log",s,false);
 #endif
@@ -68,10 +61,11 @@ void mcuSendMessage( const char* data) {
 
 #ifdef MCU_DEBUG
   char s[256];
-  sprintf(s, "> %s:%02x", data,sum);
+  sprintf(s, "> %s:%02x phs=%d,pos=%d,state=%d,dir=%d,cs=%d", data, sum, mcuPhase, mcuPosition, mcuMotorState, mcuDirection, mcuCommandSet);
   mqttPublish("Log",s,false);
   aePrintln(s);
 #endif
+  mcuLastRead = millis() + (unsigned long)500;
 }
 
 void mcuSendMessage( const __FlashStringHelper* data) {
@@ -97,38 +91,27 @@ MotorState mcuGetMotorState() {
   return mcuMotorState;
 }
 
-void mcuReverse() {
-  if( mcuReversed ) { // Disable reversing
-    if( mcuCommandSet==0 ) {
-      mcuSendMessage( F("55aa000600056700000100") );
-    } else {
-      mcuSendMessage( F("55aa000600050500000100") );
-    }
-  } else { // Enable reversing
+void mcuReverse( bool reversed ) {
+  if( reversed ) { // Enable reversing
     if( mcuCommandSet==0 ) {
       mcuSendMessage( F("55aa000600056700000101") );
     } else {
       mcuSendMessage( F("55aa000600050500000101") );
     }
-  }
-}
-
-void mcuStop() {
-  mcuTriggeredByHand = false;
-  if( mcuCommandSet==0 ) {
-    mcuSendMessage( F("55aa000600056504000101") );
-  } else {
-    mcuSendMessage( F("55aa000600050104000101") );
+  } else { // Disable reversing
+    if( mcuCommandSet==0 ) {
+      mcuSendMessage( F("55aa000600056700000100") );
+    } else {
+      mcuSendMessage( F("55aa000600050500000100") );
+    }
   }
 }
 
 void mcuSetPosition( int position ) {
   mcuTriggeredByHand = false;
   if( position+3 < mcuPosition ) {
-    mcuMotorState = Opening;
     mcuDirection = Opening;
   } else if( position-3 > mcuPosition ) {
-    mcuMotorState = Closing;  
     mcuDirection = Closing;
   }
 
@@ -155,6 +138,15 @@ void mcuSetPosition( int position ) {
   }
 }
 
+void mcuStop() {
+  mcuTriggeredByHand = false;
+  if( mcuCommandSet==0 ) {
+    mcuSendMessage( F("55aa000600056504000101") );
+  } else {
+    mcuSendMessage( F("55aa000600050104000101") );
+  }
+}
+
 void mcuContinue() {
   if( (mcuDirection == Opening) && (mcuPosition>97) ) {
     mcuDirection = Closing;
@@ -163,6 +155,35 @@ void mcuContinue() {
   }
   mcuSetPosition( (mcuDirection == Opening) ? 100 : 0 );
 }
+
+void mcuOpenKey(){
+  if( mcuPosition<99) {
+    if (mcuMotorState == MotorState::Idle) {
+      mcuSetPosition(100);
+    } else {
+      mcuStop();
+    }
+  }
+}
+
+void mcuCloseKey(){
+  if( mcuPosition>0) {
+    if (mcuMotorState == MotorState::Idle) {
+      mcuSetPosition(0);
+    } else {
+      mcuStop();
+    }
+  }
+}
+
+void mcuSingleKey(){
+  if (mcuMotorState == MotorState::Idle) {
+      mcuContinue();
+  } else {
+      mcuStop();
+  }
+}
+
 
 #pragma endregion
 void mcuProcessData() {
@@ -177,47 +198,45 @@ void mcuProcessData() {
     case 0x02: { // Module working mode
       break;
     }
+    
     case 0x07: {
       switch (mcuData[6]) { // <=== DP ID
         case 0x67: 
-        case 0x05: { // Motor reversing state
-          mcuCommandSet = ( mcuData[6]>0x10 ) ? 0 : 1;
-          mcuReversed = !!mcuData[10];
+        case 0x05: { // Motor reversing state - NOT RELIABLE :(
+          //mcuReversed = !!mcuData[10];
           break;
         }
         case 0x65: 
         case 0x01: { // Operation mode state
-          mcuCommandSet = ( mcuData[6]>0x10 ) ? 0 : 1;
-          switch ( mcuData[10]) {
-            case 0x00:
-              mcuMotorState = Closing;
-              mcuDirection = Closing;
-              break;
-            case 0x01:
-              mcuMotorState = Idle;
-              break;
-            case 0x02:
-              mcuMotorState = Opening;
-              mcuDirection = Opening;
-              break;
+          if( mcuData[7]==4 ) { // <=== Data type = ENUM
+            mcuCommandSet = ( mcuData[6]>0x10 ) ? 0 : 1;
+            switch ( mcuData[10]) {
+              case 0x00:
+                mcuMotorState = Closing;
+                mcuDirection = Closing;
+                break;
+              case 0x01:
+                mcuMotorState = Idle;
+                break;
+              case 0x02:
+                mcuMotorState = Opening;
+                mcuDirection = Opening;
+                break;
+            }
           }
           break;
         }
         // Position reports during operation
         case 0x66: 
         case 0x07:  {
-          mcuCommandSet = ( mcuData[6]>0x10 ) ? 0 : 1;
           if( (mcuCommandSet) && (mcuLen>10) ) {
             if( mcuData[10] == 1) {
-              mcuMotorState = Opening;
               mcuDirection = Opening;
             } else {
-              mcuMotorState = Closing;
               mcuDirection = Closing;
             }
-          } else if( mcuMotorState == Idle ) {
-            mcuMotorState = Moving;
           }
+          mcuMotorState = mcuDirection;
           if( mcuLen>13 ) {
             mcuPosition = mcuData[13];
             if (mcuPosition >= 95) mcuPosition = 100;
@@ -232,7 +251,6 @@ void mcuProcessData() {
         // Position reports after operation
         case 0x68:
         case 0x03: {
-          mcuCommandSet = ( mcuData[6]>0x10 ) ? 0 : 1;
           mcuMotorState = MotorState::Idle;
           if( mcuLen>13 ) {
             mcuPosition = mcuData[13];
@@ -250,6 +268,7 @@ void mcuProcessData() {
 
 void mcuLoop() {
 	unsigned long t = millis();
+  if (mcuLastRead==0) mcuLastRead = t;
 
   while (mcu.available()>0) {
     // Packet read timeout
@@ -261,15 +280,15 @@ void mcuLoop() {
     if( mcuLen >= sizeof(mcuData)-1 ) {
       mcuLogData("Too long");
       mcuLen=0;
+      mcuData[0]=mcuData[1]=0;
     }
 
     mcuLastRead = t;
-    int d = mcu.read();
-    //mcuData[mcuLen++] = mcu.read(); 
-    mcuData[mcuLen++] = d; 
+    mcuData[mcuLen++] = mcu.read(); 
     // Invalid packet header (0x55AA)
     if( (mcuData[0]!=0x55) || (mcuLen>1) && (mcuData[1]!=0xAA) ) {
       mcuLogData("Invalid header");
+      mcuData[0]=mcuData[1]=0;
       mcuLen = 0;
     } else {
       // Check if packet received correctly.
@@ -296,30 +315,37 @@ void mcuLoop() {
       }
     }
   }
+  
+#ifdef MCU_DEBUG
+if (!mqttConnected() ) return;
+#endif
 
-  if( (unsigned long)(t - mcuLastRead) > (unsigned long)1000 ) {
-
-    (unsigned long)(t + (unsigned long)300);
-    if( (unsigned long)(t - mcuHeartBeat) > (unsigned long)15000 ) {
+  if( (unsigned long)(t - mcuLastRead) > (unsigned long)500 ) {
+    if( mcuPhase == 0 ) { // Just Started Up
       // Send heartbeat
       mcuSendMessage( F("55aa00000000"));
-      if( mcuPhase <= HeartBeat ) mcuPhase = DeviceInfo;
-      mcuHeartBeat = t;
-      mcuLastRead = t;
-    } else {
-      if( mcuPhase == MCUPhase::DeviceInfo) {
-        mcuSendMessage(F("55aa00010000"));
-        mcuPhase = MCUPhase::WorkingMode;
-        mcuLastRead = t;
-      } else if( mcuPhase == MCUPhase::WorkingMode) {
-        mcuSendMessage(F("55aa00020000"));
-        mcuPhase = MCUPhase::WorkingStatus;
-        mcuLastRead = t;
-      } else if( mcuPhase == MCUPhase::WorkingStatus) {
-        mcuSendMessage(F("55aa00080000"));
-        mcuPhase = MCUPhase::Normal;
-        mcuLastRead = t;
-      } else if( mcuPhase == MCUPhase::Normal) {
+      mcuPhase++;
+    } else if( mcuPhase == 1) { // Get Device Info
+      mcuSendMessage(F("55aa00010000"));
+      mcuPhase++;
+    } else if( mcuPhase == 2) { // Query work mode
+      mcuSendMessage(F("55aa00020000"));
+      mcuPhase++;
+    } else if( mcuPhase == 3) { // Query device status
+      mcuSendMessage(F("55aa00080000"));
+      mcuPhase++;
+    } else if( mcuPhase == 4) { // Send "Stop" command using command set 0 to test reaction
+      mcuSendMessage( F("55aa000600056504000101") );
+      mcuPhase++;
+    } else if( mcuPhase == 5) { // Send "Stop" command using command set 1 to test reaction
+      mcuSendMessage( F("55aa000600050104000101") );
+      mcuPhase++;
+    } else { // Normal operation mode
+      if( (unsigned long)(t - mcuHeartBeat) > (unsigned long)10000 ) {
+        // Send heartbeat
+        mcuSendMessage( F("55aa00000000"));
+        mcuHeartBeat = t;
+      } else {
         static char _wifiStatus = -1;
         if( _wifiStatus != (char) mqttConnected() ) {
           char b[32];
@@ -328,11 +354,9 @@ void mcuLoop() {
           mcuSendMessage(  b );
           _wifiStatus = (char) mqttConnected();
         }
-        mcuLastRead = t;
       }
     }
   }
-
 }
 
 void mcuInit() {

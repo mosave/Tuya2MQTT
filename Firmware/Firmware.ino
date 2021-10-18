@@ -24,7 +24,11 @@ static char* CMD_Open PROGMEM = "Open";
 static char* CMD_Close PROGMEM = "Close";
 static char* CMD_Stop PROGMEM = "Stop";
 static char* CMD_Continue PROGMEM = "Continue";
-static char* CMD_Reverse PROGMEM = "Reverse";
+static char* CMD_OpenKey PROGMEM = "OpenKey";
+static char* CMD_CloseKey PROGMEM = "CloseKey";
+static char* CMD_SingleKey PROGMEM = "SingleKey";
+static char* CMD_SetReversed PROGMEM = "SetReversed";
+static char* CMD_SetNormal PROGMEM = "SetNormal";
 
 #ifdef MCU_DEBUG  
 static char* TOPIC_MCUCommand PROGMEM = "MCUCommand";
@@ -80,13 +84,19 @@ bool mqttCallback(char* topic, byte* payload, unsigned int length) {
         mcuStop();
       } else if( strcmp( cmd, CMD_Continue )==0 ) {
         mcuContinue();
-      } else if( strcmp( cmd, CMD_Reverse )==0 ) {
-        mcuReverse();
-        
-        commsClearTopicAndRestart(TOPIC_Command);
+      } else if (strcmp(cmd, CMD_OpenKey) == 0) {
+        mcuOpenKey();
+      } else if (strcmp(cmd, CMD_CloseKey) == 0) {
+        mcuCloseKey();
+      } else if (strcmp(cmd, CMD_SingleKey) == 0) {
+        mcuSingleKey();
+      } else if( strcmp( cmd, CMD_SetReversed )==0 ) {
+        mcuReverse(true);
+        return true;
+      } else if( strcmp( cmd, CMD_SetNormal )==0 ) {
+        mcuReverse(false);
         return true;
       }
-      mqttPublish( TOPIC_Command, (char *)NULL, false );
     }
     return true;
   }

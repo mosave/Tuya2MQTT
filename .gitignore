@@ -3,12 +3,14 @@ Buffer/
 .vs
 .vs/
 __vm/
+Firmware/Release/*
 *.sln
 *.skb
 *.vcxproj
 *.vcxproj.*
 Config.AE.h
 Backup.bat
+board.txt
 
 # C extensions
 *.so

@@ -15,12 +15,13 @@ bool mcuIsAlive();
 MotorState mcuGetMotorState();
 int mcuGetPosition();
 
-void mcuReverse();
-void mcuStop();
+void mcuReverse( bool reversed );
 void mcuSetPosition( int position );
-
-// One-key curtain operation. Cycle thru open-close states according to last direction.
+void mcuStop();
 void mcuContinue();
+void mcuOpenKey();
+void mcuCloseKey();
+void mcuSingleKey();
 
 void mcuInit();
 #endif
