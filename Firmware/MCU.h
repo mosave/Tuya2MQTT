@@ -18,6 +18,7 @@ int mcuGetPosition();
 void mcuReverse( bool reversed );
 void mcuSetPosition( int position );
 void mcuStop();
+void mcuChangeDirection();
 void mcuContinue();
 void mcuOpenKey();
 void mcuCloseKey();

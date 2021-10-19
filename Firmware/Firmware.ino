@@ -24,6 +24,7 @@ static char* CMD_Open PROGMEM = "Open";
 static char* CMD_Close PROGMEM = "Close";
 static char* CMD_Stop PROGMEM = "Stop";
 static char* CMD_Continue PROGMEM = "Continue";
+static char* CMD_ChangeDirection PROGMEM = "ChangeDirection";
 static char* CMD_OpenKey PROGMEM = "OpenKey";
 static char* CMD_CloseKey PROGMEM = "CloseKey";
 static char* CMD_SingleKey PROGMEM = "SingleKey";
@@ -82,6 +83,8 @@ bool mqttCallback(char* topic, byte* payload, unsigned int length) {
         mcuSetPosition(0);
       } else if( strcmp( cmd, CMD_Stop )==0 ) {
         mcuStop();
+      } else if( strcmp( cmd, CMD_ChangeDirection )==0 ) {
+        mcuChangeDirection();
       } else if( strcmp( cmd, CMD_Continue )==0 ) {
         mcuContinue();
       } else if (strcmp(cmd, CMD_OpenKey) == 0) {

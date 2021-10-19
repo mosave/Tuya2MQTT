@@ -5,6 +5,7 @@
 
 MotorState mcuMotorState = Idle;
 MotorState mcuDirection = Closing;
+bool mcuCalibrated = false;
 int mcuPosition = false;
 char mcuData[128];
 int mcuLen = 0;
@@ -109,9 +110,9 @@ void mcuReverse( bool reversed ) {
 
 void mcuSetPosition( int position ) {
   mcuTriggeredByHand = false;
-  if( position+3 < mcuPosition ) {
+  if( position < mcuPosition ) {
     mcuDirection = Opening;
-  } else if( position-3 > mcuPosition ) {
+  } else if( position > mcuPosition ) {
     mcuDirection = Closing;
   }
 
@@ -147,7 +148,23 @@ void mcuStop() {
   }
 }
 
+void mcuChangeDirection() {
+  bool isMoving = (mcuMotorState!=MotorState::Idle);
+  if( isMoving) {
+    mcuStop();
+  }
+  mcuDirection = (mcuDirection == MotorState::Opening) ? MotorState::Closing : MotorState::Opening;
+  if( isMoving ) {
+    delay(500);
+    mcuSetPosition( (mcuDirection == Opening) ? 100 : 0 );
+  }
+}
+
 void mcuContinue() {
+  if ( (mcuMotorState==MotorState::Idle) && (!mcuCalibrated) && (mcuPosition==50)) {
+    mcuDirection = (mcuDirection == MotorState::Opening) ? MotorState::Closing : MotorState::Opening;
+  }
+  
   if( (mcuDirection == Opening) && (mcuPosition>97) ) {
     mcuDirection = Closing;
   } else if( (mcuDirection == Closing) && (mcuPosition<3) ) {
@@ -241,6 +258,7 @@ void mcuProcessData() {
             mcuPosition = mcuData[13];
             if (mcuPosition >= 95) mcuPosition = 100;
             if (mcuPosition <= 5) mcuPosition = 0;
+            if (mcuPosition != 50) mcuCalibrated = true;
           }
           if( mcuTriggeredByHand ) {
             triggerActivity();
@@ -256,6 +274,7 @@ void mcuProcessData() {
             mcuPosition = mcuData[13];
             if (mcuPosition >= 95) mcuPosition = 100;
             if (mcuPosition <= 5) mcuPosition = 0;
+            if (mcuPosition != 50) mcuCalibrated = true;
           }
           mcuTriggeredByHand = true;
           break;
