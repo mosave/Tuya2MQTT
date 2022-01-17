@@ -26,6 +26,10 @@
 #define I2C_SDA 4
 #define I2C_SCL 5
 
+// SDA/SCL PIO for ESP-1S controller:
+#define I2C_1S_SDA 0
+#define I2C_1S_SCL 2
+
 // Define this to autosynchronize time if NTP server is available.
 // Check "tz.h" for timezone constants
 #define TIMEZONE TZ_Europe_Moscow

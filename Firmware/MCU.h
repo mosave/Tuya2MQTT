@@ -8,14 +8,32 @@ enum MotorState {
     Moving
 };
 
+enum MotorLimit {
+    Up,
+    Down,
+    Middle
+};
+
+enum MotorMode {
+    Linkage,
+    Inching
+};
+
+
 //MCU_DEBUG only!!!
 void mcuSendMessage( const char* data);
 
 bool mcuIsAlive();
 MotorState mcuGetMotorState();
 int mcuGetPosition();
+bool mcuNetworkResetRequested();
 
 void mcuReverse( bool reversed );
+void mcuSetLimit( MotorLimit limit);
+void mcuClearLimit(MotorLimit limit);
+void mcuSetMotorMode(MotorMode mode);
+void mcuPairing();
+
 void mcuSetPosition( int position );
 void mcuStop();
 void mcuChangeDirection();

@@ -4,11 +4,20 @@
 // Flash size: 2MB / FS:None
 // Erase Flash: ALL content
 
+// Zemismart Roller Shade Motor: ESP-01S module configuration to reflash:
+// Board: ESP8266 generic (Chip is ESP8266EX)
+// Crystal is 26MHz
+// Flash size: 1MB / FS:None
+// Erase Flash: ALL content
+
+
+
 #include <stdarg.h>
 #include "Config.h"
 #include "Storage.h"
 #include "Comms.h"
 #include "MCU.h"
+#include <ESP8266WiFi.h>
 
 #ifdef I2C_SDA
   #include <Wire.h>
@@ -30,6 +39,14 @@ static char* CMD_CloseKey PROGMEM = "CloseKey";
 static char* CMD_SingleKey PROGMEM = "SingleKey";
 static char* CMD_SetReversed PROGMEM = "SetReversed";
 static char* CMD_SetNormal PROGMEM = "SetNormal";
+
+static char* CMD_LinkageMode PROGMEM = "LinkageMode";
+static char* CMD_InchingMode PROGMEM = "InchingMode";
+static char* CMD_Pairing PROGMEM = "Pairing";
+static char* CMD_ClearLimits PROGMEM = "ClearLimits";
+static char* CMD_SetLimitUp PROGMEM = "SetLimitUp";
+static char* CMD_SetLimitDown PROGMEM = "SetLimitDown";
+static char* CMD_SetLimitMiddle PROGMEM = "SetLimitMiddle";
 
 #ifdef MCU_DEBUG  
 static char* TOPIC_MCUCommand PROGMEM = "MCUCommand";
@@ -99,7 +116,31 @@ bool mqttCallback(char* topic, byte* payload, unsigned int length) {
       } else if( strcmp( cmd, CMD_SetNormal )==0 ) {
         mcuReverse(false);
         return true;
+      } else if (strcmp(cmd, CMD_LinkageMode) == 0) {
+          mcuSetMotorMode(MotorMode::Linkage);
+          return true;
+      } else if (strcmp(cmd, CMD_InchingMode) == 0) {
+          mcuSetMotorMode(MotorMode::Inching);
+          return true;
+      } else if (strcmp(cmd, CMD_Pairing) == 0) {
+          mcuPairing();
+          return true;
+      } else if (strcmp(cmd, CMD_ClearLimits) == 0) {
+          mcuClearLimit(MotorLimit::Middle);
+          mcuClearLimit(MotorLimit::Up);
+          mcuClearLimit(MotorLimit::Down);
+          return true;
+      } else if (strcmp(cmd, CMD_SetLimitUp) == 0) {
+          mcuSetLimit(MotorLimit::Up);
+          return true;
+      } else if (strcmp(cmd, CMD_SetLimitDown) == 0) {
+          mcuSetLimit(MotorLimit::Down);
+          return true;
+      } else if (strcmp(cmd, CMD_SetLimitMiddle) == 0) {
+          mcuSetLimit(MotorLimit::Middle);
+          return true;
       }
+
     }
     return true;
   }
@@ -179,7 +220,15 @@ void setup() {
   commsInit();
 
 #ifdef I2C_SDA
-  Wire.begin( I2C_SDA, I2C_SCL );
+  uint8_t macAddr[6];
+  char s[31];
+  WiFi.macAddress(macAddr);
+  // E8 DB 84 DF 71 E0 - specific ESP-1S address range
+  if ((macAddr[0] == 0xE8) && (macAddr[1] == 0xDB) && (macAddr[2] == 0x84) && (macAddr[3] == 0xDF)) {
+      Wire.begin(I2C_1S_SDA, I2C_1S_SCL);
+  } else {
+      Wire.begin(I2C_SDA, I2C_SCL);
+  }
   lightMeterInit(USE_SUNSET_TRACKER);
 #endif
 
@@ -192,5 +241,8 @@ void setup() {
 void loop() {
   Loop();
   publishState();
+  if (mcuNetworkResetRequested()) {
+      storageReset();
+  }
   delay(10);
 }

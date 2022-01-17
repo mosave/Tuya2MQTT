@@ -9,7 +9,8 @@ bool mcuCalibrated = false;
 int mcuPosition = false;
 char mcuData[128];
 int mcuLen = 0;
-bool mcuTriggeredByHand = true;
+bool mcuTriggeredByHand = false;
+bool mcuIsNetworkResetRequested = false;
 int mcuCommandSet = 0;
 
 unsigned long mcuLastRead = 0;
@@ -92,6 +93,12 @@ MotorState mcuGetMotorState() {
   return mcuMotorState;
 }
 
+bool mcuNetworkResetRequested() {
+    bool b = mcuIsNetworkResetRequested;
+    mcuIsNetworkResetRequested = false;
+    return b;
+}
+
 void mcuReverse( bool reversed ) {
   if( reversed ) { // Enable reversing
     if( mcuCommandSet==0 ) {
@@ -106,7 +113,91 @@ void mcuReverse( bool reversed ) {
       mcuSendMessage( F("55aa000600050500000100") );
     }
   }
+  delay(300);
 }
+
+void mcuSetLimit(MotorLimit limit) {
+    switch (limit) {
+    case MotorLimit::Up:
+        //if (mcuCommandSet == 0) {
+        mcuSendMessage(F("55aa000600056901000101"));
+        //} else {
+        //    mcuSendMessage(F("55aa000600056701000101"));
+        //}
+        break;
+    case MotorLimit::Down:
+        //if (mcuCommandSet == 0) {
+        mcuSendMessage(F("55aa000600056701000101"));
+        //} else {
+        //    mcuSendMessage(F("55aa000600056901000101"));
+        //}
+        break;
+    case MotorLimit::Middle:
+        //if (mcuCommandSet == 0) {
+        mcuSendMessage(F("55aa000600056801000101"));
+        //} else {
+        //    mcuSendMessage(F("55aa000600056801000101"));
+        //}
+        break;
+    }
+    delay(300);
+}
+void mcuClearLimit(MotorLimit limit) {
+    //mcu.write(0xFF);
+
+    switch (limit) {
+    case MotorLimit::Up:
+        //if (mcuCommandSet == 0) {
+        mcuSendMessage(F("55aa000600056901000100"));
+        //} else {
+        //    mcuSendMessage(F("55aa000600056701000100"));
+        //}
+        break;
+    case MotorLimit::Down:
+        //if (mcuCommandSet == 0) {
+        mcuSendMessage(F("55aa000600056701000100"));
+        //} else {
+        //    mcuSendMessage(F("55aa000600056901000100"));
+        //}
+        break;
+    case MotorLimit::Middle:
+        //if (mcuCommandSet == 0) {
+            mcuSendMessage(F("55aa000600056801000100"));
+        //} else {
+        //    mcuSendMessage(F("55aa000600056801000100"));
+        //}
+        break;
+    }
+    delay(300);
+}
+void mcuSetMotorMode(MotorMode mode) {
+    switch (mode) {
+    case MotorMode::Inching:
+        //if (mcuCommandSet == 0) {
+            mcuSendMessage(F("55aa000600056a04000101"));
+        //} else {
+        //    mcuSendMessage(F("55aa000600056a04000101"));
+        //}
+        break;
+    default:
+        //if (mcuCommandSet == 0) {
+            mcuSendMessage(F("55aa000600056a04000100"));
+        //} else {
+        //    mcuSendMessage(F("55aa000600056a04000100"));
+        //}
+        break;
+    }
+    delay(300);
+}
+void mcuPairing() {
+    //if (mcuCommandSet == 0) {
+        mcuSendMessage(F("55aa000600056501000101"));
+    //} else {
+    //    mcuSendMessage(F("55aa000600056501000101"));
+    //}
+    delay(300);
+}
+
 
 void mcuSetPosition( int position ) {
   mcuTriggeredByHand = false;
@@ -137,6 +228,7 @@ void mcuSetPosition( int position ) {
     }
     mcuSendMessage( cmd );
   }
+  delay(300);
 }
 
 void mcuStop() {
@@ -146,6 +238,7 @@ void mcuStop() {
   } else {
     mcuSendMessage( F("55aa000600050104000101") );
   }
+  delay(300);
 }
 
 void mcuChangeDirection() {
@@ -158,6 +251,7 @@ void mcuChangeDirection() {
     delay(500);
     mcuSetPosition( (mcuDirection == Opening) ? 100 : 0 );
   }
+  delay(300);
 }
 
 void mcuContinue() {
@@ -171,6 +265,7 @@ void mcuContinue() {
     mcuDirection = Opening;
   }
   mcuSetPosition( (mcuDirection == Opening) ? 100 : 0 );
+  delay(300);
 }
 
 void mcuOpenKey(){
@@ -181,6 +276,7 @@ void mcuOpenKey(){
       mcuStop();
     }
   }
+  delay(300);
 }
 
 void mcuCloseKey(){
@@ -191,6 +287,7 @@ void mcuCloseKey(){
       mcuStop();
     }
   }
+  delay(300);
 }
 
 void mcuSingleKey(){
@@ -199,10 +296,10 @@ void mcuSingleKey(){
   } else {
       mcuStop();
   }
+  delay(300);
 }
-
-
 #pragma endregion
+
 void mcuProcessData() {
   //int size = mcuData[5];
   switch (mcuData[3]) { // Command
@@ -215,6 +312,13 @@ void mcuProcessData() {
     case 0x02: { // Module working mode
       break;
     }
+    case 0x04: { // Check if network reset was requested by pressing motor button *3:
+        //< 55 aa 03 04 00 00 06
+        if( (mcuData[4]==0x00) && (mcuData[5] == 0x00) && (mcuData[6] == 0x06) ){
+            mcuIsNetworkResetRequested = true;
+        }
+        break;
+    }
     
     case 0x07: {
       switch (mcuData[6]) { // <=== DP ID
@@ -226,7 +330,11 @@ void mcuProcessData() {
         case 0x65: 
         case 0x01: { // Operation mode state
           if( mcuData[7]==4 ) { // <=== Data type = ENUM
+            int cs = mcuCommandSet;
             mcuCommandSet = ( mcuData[6]>0x10 ) ? 0 : 1;
+            if( cs != mcuCommandSet) {
+                aePrint("MCU command set "); aePrintln(mcuCommandSet);
+            }
             switch ( mcuData[10]) {
               case 0x00:
                 mcuMotorState = Closing;
@@ -343,21 +451,27 @@ if (!mqttConnected() ) return;
     if( mcuPhase == 0 ) { // Just Started Up
       // Send heartbeat
       mcuSendMessage( F("55aa00000000"));
+      delay(100);
       mcuPhase++;
     } else if( mcuPhase == 1) { // Get Device Info
       mcuSendMessage(F("55aa00010000"));
+      delay(100);
       mcuPhase++;
     } else if( mcuPhase == 2) { // Query work mode
       mcuSendMessage(F("55aa00020000"));
+      delay(100);
       mcuPhase++;
     } else if( mcuPhase == 3) { // Query device status
       mcuSendMessage(F("55aa00080000"));
+      delay(100);
       mcuPhase++;
     } else if( mcuPhase == 4) { // Send "Stop" command using command set 0 to test reaction
       mcuSendMessage( F("55aa000600056504000101") );
+      delay(200);
       mcuPhase++;
     } else if( mcuPhase == 5) { // Send "Stop" command using command set 1 to test reaction
       mcuSendMessage( F("55aa000600050104000101") );
+      delay(200);
       mcuPhase++;
     } else { // Normal operation mode
       if( (unsigned long)(t - mcuHeartBeat) > (unsigned long)10000 ) {
