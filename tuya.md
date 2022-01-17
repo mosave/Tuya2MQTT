@@ -1,4 +1,4 @@
-### Обновление прошивки привода Tuya WiFi Curtains Motor
+# Обновление прошивки привода Tuya WiFi Curtains Motor
 
  * [Апгрейд модуля в приводе Zemismart WiFi Roller Shade Motor](https://github.com/mosave/Tuya2MQTT/raw/main/tuya.md)
 
@@ -40,3 +40,6 @@ MCU к тому же постоянно шлет пакеты, вызывая о
 подключается к TX/RX адаптера (вперехлест), что кнопку Flash не стоит отпускать до окончания процесса прошивки
 и умеет сам решать возникающие трудности. Я не готов устраивать ликбез, со вопросами идите в гугль :)
 
+### Организация внешнего разъема для подключения дополнительных устройств:
+![Вывод I2C на внешний разъем](https://github.com/mosave/Tuya2MQTT/raw/main/Photos/04_I2C.jpg)
+![I2C разъем на приводе](https://github.com/mosave/Tuya2MQTT/raw/main/Photos/05_I2C.jpg)

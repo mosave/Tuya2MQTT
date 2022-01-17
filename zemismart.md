@@ -1,4 +1,4 @@
-### Апгрейд модуля в приводе Zemismart WiFi Roller Shade Motor
+# Апгрейд модуля в приводе Zemismart WiFi Roller Shade Motor
 
 Для разборки привода необходимо:
 
@@ -24,7 +24,8 @@
 
 ![Подготовка ESP-01S к подключению внешней антенны](https://github.com/mosave/Tuya2MQTT/raw/main/Photos/02Controlz02antena.jpg)
 
-Прошитый и установленный модуль ESP-01S:
+Прошитый и установленный модуль ESP-01S. На случай необходимости подключения к приводу дополнительных устройств, 
+свободные каналы контроллера выведены на внешний разъем.
 
 ![Плата мотора с установленным ESP-01S](https://github.com/mosave/Tuya2MQTT/raw/main/Photos/z03esp01s.jpg)
 

@@ -122,17 +122,13 @@ Visual Studio с пакетом Visual Micro, PlatformIO или аналогич
 команды MCU отправляются не на стандартный последовательный интерфейс а на SoftSerial.
 
 ### Апгрейд контроллера
-
- * [Обновление прошивки привода Tuya WiFi Curtains Motor](https://github.com/mosave/Tuya2MQTT/raw/main/tuya.md)
- * [Апгрейд модуля в приводе Zemismart WiFi Roller Shade Motor](https://github.com/mosave/Tuya2MQTT/raw/main/tuya.md)
+ * [Обновление прошивки привода Tuya WiFi Curtains Motor](https://github.com/mosave/Tuya2MQTT/blob/main/tuya.md)
+ * [Апгрейд модуля в приводе Zemismart WiFi Roller Shade Motor](https://github.com/mosave/Tuya2MQTT/blob/main/zemismart.md)
 
 ### Бонусы и плюшки
-
 ESP8266 - интересная и достаточно мощная штука, которая помимо управления шторами решать и кучу других задач. 
 Например, к нему можно подключить датчики температуры и влажности (хотя расположение у окна 
 за шторами не лучшее), датчики открытия окна, движения или просто освещенности на улице. 
-Для этих целей я дополнительно вывожу 3.3v, GPIO4 и GPIO5 на разъем на корпусе привода:
+Для этих целей я дополнительно вывожу 3.3v, GPIO4 и GPIO5 на разъем на корпусе привода.
 
-![Вывод I2C на внешний разъем](https://github.com/mosave/Tuya2MQTT/raw/main/Photos/04_I2C.jpg)
-![I2C разъем на приводе](https://github.com/mosave/Tuya2MQTT/raw/main/Photos/05_I2C.jpg)
 
