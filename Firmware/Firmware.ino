@@ -5,7 +5,7 @@
 // Erase Flash: ALL content
 
 // Zemismart Roller Shade Motor: ESP-01S module configuration to reflash:
-// Board: ESP8266 generic (Chip is ESP8266EX)
+// Board: Generic ESP8266 Module (Chip is ESP8266EX)
 // Crystal is 26MHz
 // Flash size: 1MB / FS:None
 // Erase Flash: ALL content
@@ -33,7 +33,6 @@ static char* CMD_Open PROGMEM = "Open";
 static char* CMD_Close PROGMEM = "Close";
 static char* CMD_Stop PROGMEM = "Stop";
 static char* CMD_Continue PROGMEM = "Continue";
-static char* CMD_ChangeDirection PROGMEM = "ChangeDirection";
 static char* CMD_OpenKey PROGMEM = "OpenKey";
 static char* CMD_CloseKey PROGMEM = "CloseKey";
 static char* CMD_SingleKey PROGMEM = "SingleKey";
@@ -44,6 +43,8 @@ static char* CMD_LinkageMode PROGMEM = "LinkageMode";
 static char* CMD_InchingMode PROGMEM = "InchingMode";
 static char* CMD_Pairing PROGMEM = "Pairing";
 static char* CMD_ClearLimits PROGMEM = "ClearLimits";
+static char* CMD_ClearLimitUp PROGMEM = "ClearLimitUp";
+static char* CMD_ClearLimitDown PROGMEM = "ClearLimitDown";
 static char* CMD_SetLimitUp PROGMEM = "SetLimitUp";
 static char* CMD_SetLimitDown PROGMEM = "SetLimitDown";
 static char* CMD_SetLimitMiddle PROGMEM = "SetLimitMiddle";
@@ -82,9 +83,7 @@ bool mqttCallback(char* topic, byte* payload, unsigned int length) {
       char b[16];
       memset( b, 0, sizeof(b) );
       strncpy( b, ((char*)payload), length );
-      int p = atoi(b);
-      if(p<0) p=0; else if (p>100) p=100;
-      mcuSetPosition(p);
+      mcuSetPosition(atoi(b));
     }
     return true;
   }
@@ -100,47 +99,51 @@ bool mqttCallback(char* topic, byte* payload, unsigned int length) {
         mcuSetPosition(0);
       } else if( strcmp( cmd, CMD_Stop )==0 ) {
         mcuStop();
-      } else if( strcmp( cmd, CMD_ChangeDirection )==0 ) {
-        mcuChangeDirection();
       } else if( strcmp( cmd, CMD_Continue )==0 ) {
         mcuContinue();
       } else if (strcmp(cmd, CMD_OpenKey) == 0) {
-        mcuOpenKey();
+          if (mcuGetMotorState() != MotorState::Opening) {
+              mcuSetPosition(100);
+          } else {
+              mcuStop();
+          }
       } else if (strcmp(cmd, CMD_CloseKey) == 0) {
-        mcuCloseKey();
+          if (mcuGetMotorState() != MotorState::Closing) {
+              mcuSetPosition(0);
+          } else {
+              mcuStop();
+          }
       } else if (strcmp(cmd, CMD_SingleKey) == 0) {
-        mcuSingleKey();
-      } else if( strcmp( cmd, CMD_SetReversed )==0 ) {
-        mcuReverse(true);
-        return true;
-      } else if( strcmp( cmd, CMD_SetNormal )==0 ) {
-        mcuReverse(false);
-        return true;
+          if (mcuGetMotorState() == MotorState::Idle) {
+              mcuContinue();
+          } else {
+              mcuStop();
+          }
+      } else if (strcmp(cmd, CMD_SetReversed) == 0) {
+          mcuReverse(true);
+      } else if (strcmp(cmd, CMD_SetNormal) == 0) {
+          mcuReverse(false);
       } else if (strcmp(cmd, CMD_LinkageMode) == 0) {
           mcuSetMotorMode(MotorMode::Linkage);
-          return true;
       } else if (strcmp(cmd, CMD_InchingMode) == 0) {
           mcuSetMotorMode(MotorMode::Inching);
-          return true;
       } else if (strcmp(cmd, CMD_Pairing) == 0) {
           mcuPairing();
-          return true;
       } else if (strcmp(cmd, CMD_ClearLimits) == 0) {
           mcuClearLimit(MotorLimit::Middle);
           mcuClearLimit(MotorLimit::Up);
           mcuClearLimit(MotorLimit::Down);
-          return true;
+      } else if (strcmp(cmd, CMD_ClearLimitUp) == 0) {
+          mcuClearLimit(MotorLimit::Up);
+      } else if (strcmp(cmd, CMD_ClearLimitDown) == 0) {
+          mcuClearLimit(MotorLimit::Down);
       } else if (strcmp(cmd, CMD_SetLimitUp) == 0) {
           mcuSetLimit(MotorLimit::Up);
-          return true;
       } else if (strcmp(cmd, CMD_SetLimitDown) == 0) {
           mcuSetLimit(MotorLimit::Down);
-          return true;
       } else if (strcmp(cmd, CMD_SetLimitMiddle) == 0) {
           mcuSetLimit(MotorLimit::Middle);
-          return true;
       }
-
     }
     return true;
   }
@@ -224,7 +227,7 @@ void setup() {
   char s[31];
   WiFi.macAddress(macAddr);
   // E8 DB 84 DF 71 E0 - specific ESP-1S address range
-  if ((macAddr[0] == 0xE8) && (macAddr[1] == 0xDB) && (macAddr[2] == 0x84) && (macAddr[3] == 0xDF)) {
+  if ((macAddr[0] == 0xE8) && (macAddr[1] == 0xDB) && (macAddr[2] == 0x84)) {
       Wire.begin(I2C_1S_SDA, I2C_1S_SCL);
   } else {
       Wire.begin(I2C_SDA, I2C_SCL);

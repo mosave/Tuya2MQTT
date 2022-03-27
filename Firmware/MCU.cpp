@@ -3,6 +3,7 @@
 #include "MCU.h"
 #include "Comms.h"
 
+char mcuDeviceId[64] = "";
 MotorState mcuMotorState = Idle;
 MotorState mcuDirection = Closing;
 bool mcuCalibrated = false;
@@ -11,12 +12,18 @@ char mcuData[128];
 int mcuLen = 0;
 bool mcuTriggeredByHand = false;
 bool mcuIsNetworkResetRequested = false;
+#ifdef MCU_MOTOR_INVERTED
+  bool mcuMotorInverted = MCU_MOTOR_INVERTED;
+#else
+  bool mcuMotorInverted = 0;
+#endif
 int mcuCommandSet = 0;
 
 unsigned long mcuLastRead = 0;
 unsigned long mcuHeartBeat = 0;
 unsigned long mcuLastAlive = 0;
 int mcuPhase = 0;
+bool mcuReversed = false;
 
 #ifdef USE_SOFT_SERIAL
 	#include <SoftwareSerial.h>
@@ -78,6 +85,21 @@ void mcuSendMessage( const __FlashStringHelper* data) {
   s[n] = 0;
   mcuSendMessage( s );
 }
+void mcuSendOpen() {
+    if (mcuCommandSet == 0) {
+        mcuSendMessage(F("55aa000600056504000102"));
+    } else {
+        mcuSendMessage(F("55aa000600050104000102"));
+    }
+}
+void mcuSendClose() {
+    if (mcuCommandSet == 0) {
+        mcuSendMessage(F("55aa000600056504000100"));
+    } else {
+        mcuSendMessage(F("55aa000600050104000100"));
+    }
+}
+
 #pragma endregion
 
 #pragma region Curtains commands
@@ -120,16 +142,16 @@ void mcuSetLimit(MotorLimit limit) {
     switch (limit) {
     case MotorLimit::Up:
         //if (mcuCommandSet == 0) {
-        mcuSendMessage(F("55aa000600056901000101"));
+        mcuSendMessage(F("55aa000600056701000101"));
         //} else {
-        //    mcuSendMessage(F("55aa000600056701000101"));
+        //    mcuSendMessage(F("55aa000600056901000101"));
         //}
         break;
     case MotorLimit::Down:
         //if (mcuCommandSet == 0) {
-        mcuSendMessage(F("55aa000600056701000101"));
+        mcuSendMessage(F("55aa000600056901000101"));
         //} else {
-        //    mcuSendMessage(F("55aa000600056901000101"));
+        //    mcuSendMessage(F("55aa000600056701000101"));
         //}
         break;
     case MotorLimit::Middle:
@@ -148,16 +170,16 @@ void mcuClearLimit(MotorLimit limit) {
     switch (limit) {
     case MotorLimit::Up:
         //if (mcuCommandSet == 0) {
-        mcuSendMessage(F("55aa000600056901000100"));
+        mcuSendMessage(F("55aa000600056701000100"));
         //} else {
-        //    mcuSendMessage(F("55aa000600056701000100"));
+        //    mcuSendMessage(F("55aa000600056901000100"));
         //}
         break;
     case MotorLimit::Down:
         //if (mcuCommandSet == 0) {
-        mcuSendMessage(F("55aa000600056701000100"));
+        mcuSendMessage(F("55aa000600056901000100"));
         //} else {
-        //    mcuSendMessage(F("55aa000600056901000100"));
+        //    mcuSendMessage(F("55aa000600056701000100"));
         //}
         break;
     case MotorLimit::Middle:
@@ -198,27 +220,31 @@ void mcuPairing() {
     delay(300);
 }
 
-
+/// <summary>Move curtains to exact position
+/// Use "Close" or "Open" MCU command If target position is 0 or 100 
+/// </summary>
+/// <param name="position">Target position</param>
 void mcuSetPosition( int position ) {
   mcuTriggeredByHand = false;
-  if( position < mcuPosition ) {
-    mcuDirection = Opening;
-  } else if( position > mcuPosition ) {
-    mcuDirection = Closing;
+  if (position < 3) position = 0;
+  if (position > 97) position = 100;
+  if (position < mcuPosition) {
+      mcuDirection = mcuMotorState = MotorState::Closing;
+  } else if (position > mcuPosition) {
+      mcuDirection = mcuMotorState = MotorState::Opening;
   }
-
-  if( position <= 1 ) {
-    if( mcuCommandSet==0 ) {
-      mcuSendMessage( F("55aa000600056504000100") );
-    } else {
-      mcuSendMessage( F("55aa000600050104000100") );
-    }
-  } else if( position >= 99 ) {
-    if( mcuCommandSet==0 ) {
-      mcuSendMessage( F("55aa000600056504000102") );
-    } else {
-      mcuSendMessage( F("55aa000600050104000102") );
-    }
+  if( position == 0 ) {
+      if (mcuMotorInverted) {
+          mcuSendOpen();
+      } else {
+          mcuSendClose();
+      }
+  } else if( position == 100) {
+      if (mcuMotorInverted) {
+          mcuSendClose();
+      } else {
+          mcuSendOpen();
+      }
   } else {
     char cmd[31];
     if( mcuCommandSet==0 ) {
@@ -238,65 +264,24 @@ void mcuStop() {
   } else {
     mcuSendMessage( F("55aa000600050104000101") );
   }
-  delay(300);
-}
-
-void mcuChangeDirection() {
-  bool isMoving = (mcuMotorState!=MotorState::Idle);
-  if( isMoving) {
-    mcuStop();
-  }
-  mcuDirection = (mcuDirection == MotorState::Opening) ? MotorState::Closing : MotorState::Opening;
-  if( isMoving ) {
-    delay(500);
-    mcuSetPosition( (mcuDirection == Opening) ? 100 : 0 );
-  }
+  mcuMotorState = MotorState::Idle;
   delay(300);
 }
 
 void mcuContinue() {
-  if ( (mcuMotorState==MotorState::Idle) && (!mcuCalibrated) && (mcuPosition==50)) {
-    mcuDirection = (mcuDirection == MotorState::Opening) ? MotorState::Closing : MotorState::Opening;
-  }
-  
-  if( (mcuDirection == Opening) && (mcuPosition>97) ) {
-    mcuDirection = Closing;
-  } else if( (mcuDirection == Closing) && (mcuPosition<3) ) {
-    mcuDirection = Opening;
-  }
-  mcuSetPosition( (mcuDirection == Opening) ? 100 : 0 );
-  delay(300);
-}
-
-void mcuOpenKey(){
-  if( mcuPosition<99) {
-    if (mcuMotorState == MotorState::Idle) {
-      mcuSetPosition(100);
-    } else {
-      mcuStop();
+    if (mcuMotorState == Idle) {
+        MotorState dir = mcuDirection;
+        if ((!mcuCalibrated) && (mcuPosition == 50)) { // not calibrated - just move somewhere
+            dir = (mcuDirection == Opening) ? Closing : Opening;
+        } else if (mcuPosition > 97) {
+            dir = Closing;
+        } else if (mcuPosition < 3) {
+            dir = Opening;
+        }
+        if (dir != Idle) {
+            mcuSetPosition((dir == Opening) ? 100 : 0);
+        }
     }
-  }
-  delay(300);
-}
-
-void mcuCloseKey(){
-  if( mcuPosition>0) {
-    if (mcuMotorState == MotorState::Idle) {
-      mcuSetPosition(0);
-    } else {
-      mcuStop();
-    }
-  }
-  delay(300);
-}
-
-void mcuSingleKey(){
-  if (mcuMotorState == MotorState::Idle) {
-      mcuContinue();
-  } else {
-      mcuStop();
-  }
-  delay(300);
 }
 #pragma endregion
 
@@ -307,7 +292,14 @@ void mcuProcessData() {
       break;
     }
     case 0x01: { // Device model & soft version
-      break;
+        int len = (mcuData[5]<sizeof(mcuDeviceId)) ? mcuData[5] : (sizeof(mcuDeviceId)-1);
+        strncpy( mcuDeviceId,&mcuData[6],len);
+        mcuDeviceId[len]=0;
+#ifndef MCU_MOTOR_INVERTED
+        // Reverse motor for Zemismart devices
+        mcuMotorInverted = (strstr(mcuDeviceId,"jzmy")!=NULL);
+#endif
+        break;
     }
     case 0x02: { // Module working mode
       break;
@@ -319,49 +311,53 @@ void mcuProcessData() {
         }
         break;
     }
-    
+    // mcuData[3]
     case 0x07: {
       switch (mcuData[6]) { // <=== DP ID
         case 0x67: 
         case 0x05: { // Motor reversing state - NOT RELIABLE :(
-          //mcuReversed = !!mcuData[10];
+          mcuReversed = !!mcuData[10];
           break;
         }
-        case 0x65: 
-        case 0x01: { // Operation mode state
+        // mcuData[6]
+        case 0x65:
+        case 0x01: { // Operation state report
           if( mcuData[7]==4 ) { // <=== Data type = ENUM
             int cs = mcuCommandSet;
             mcuCommandSet = ( mcuData[6]>0x10 ) ? 0 : 1;
             if( cs != mcuCommandSet) {
                 aePrint("MCU command set "); aePrintln(mcuCommandSet);
             }
-            switch ( mcuData[10]) {
-              case 0x00:
-                mcuMotorState = Closing;
-                mcuDirection = Closing;
-                break;
-              case 0x01:
-                mcuMotorState = Idle;
-                break;
-              case 0x02:
-                mcuMotorState = Opening;
-                mcuDirection = Opening;
-                break;
-            }
+          // Ignore motor state
+          //  switch ( mcuData[10]) {
+          //    case 0x00:
+          //      mcuMotorState = Closing;
+          //      mcuDirection = Closing;
+          //      break;
+          //    case 0x01:
+          //      mcuMotorState = Idle;
+          //      break;
+          //    case 0x02:
+          //      mcuMotorState = Opening;
+          //      mcuDirection = Opening;
+          //      break;
+          //  }
           }
           break;
         }
-        // Position reports during operation
+        // mcuData[6] Position reports during operation
         case 0x66: 
         case 0x07:  {
-          if( (mcuCommandSet) && (mcuLen>10) ) {
-            if( mcuData[10] == 1) {
-              mcuDirection = Opening;
-            } else {
-              mcuDirection = Closing;
-            }
-          }
-          mcuMotorState = mcuDirection;
+          // Ignore changing motor state and direction
+          //if( (mcuCommandSet) && (mcuLen>10) ) {
+          //  if( mcuData[10] == 1) {
+          //      mcuDirection = Opening;
+          //      mcuMotorState = Opening;
+          //  } else {
+          //      mcuDirection = Closing;
+          //      mcuMotorState = Closing;
+          //  }
+          //}
           if( mcuLen>13 ) {
             mcuPosition = mcuData[13];
             if (mcuPosition >= 95) mcuPosition = 100;
@@ -374,7 +370,7 @@ void mcuProcessData() {
           }
           break;
         }
-        // Position reports after operation
+        // mcuData[6], Position reports after operation
         case 0x68:
         case 0x03: {
           mcuMotorState = MotorState::Idle;

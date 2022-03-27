@@ -2,6 +2,8 @@
 #define config_h
 #include <Arduino.h>
 
+#define VERSION "1.0"
+
 
 // Device host name and MQTT ClientId, "%s" is to be replaced with device' MAC address
 // Disables SetName MQTT command
@@ -15,11 +17,17 @@
 //#define MQTT_Address "MQTT Broker Address"
 //#define MQTT_Port 1883
 
-
-
 #ifndef WIFI_SSID
 #include "Config.AE.h"
 #endif
+
+// Override default MCU motor direction 
+// Define this if Open command erroneously move curtains to position 0 and Close to 100 
+// Possible values are:
+// 0 Open/Close behave natively
+// 1 Open/Close switched
+// Not defined: Autosense motor direction
+//#define MCU_MOTOR_INVERTED 1
 
 
 // Define to use BH1750 light meter

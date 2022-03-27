@@ -55,6 +55,7 @@ static char* TOPIC_Version PROGMEM = "Version";
 #endif
 static char* TOPIC_Online PROGMEM = "Online";
 static char* TOPIC_Address PROGMEM = "Address";
+static char* TOPIC_Broker PROGMEM = "Broker";
 static char* TOPIC_RSSI PROGMEM = "RSSI";
 static char* TOPIC_Activity PROGMEM = "Activity";
 static char* TOPIC_Reset PROGMEM = "Reset";
@@ -520,7 +521,8 @@ void commsLoop() {
           IPAddress ip = WiFi.localIP();
           sprintf( willTopic, "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
           mqttPublish( TOPIC_Address, willTopic, true  );
-          
+          mqttPublish( TOPIC_Broker, mqttServerAddress, true );
+
           for(int i=0; i<mqttCbsCount; i++ ) {
             if( mqttCbs[i].connect != NULL ) mqttCbs[i].connect();
           }

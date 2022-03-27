@@ -36,11 +36,7 @@ void mcuPairing();
 
 void mcuSetPosition( int position );
 void mcuStop();
-void mcuChangeDirection();
 void mcuContinue();
-void mcuOpenKey();
-void mcuCloseKey();
-void mcuSingleKey();
 
 void mcuInit();
 #endif
