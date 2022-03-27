@@ -68,6 +68,8 @@ static char* TOPIC_SetName PROGMEM = "SetName";
 static char* TOPIC_SetRoot PROGMEM = "SetRoot";
 #endif
 
+static char* TOPIC_HA_Status PROGMEM = "homeassistant/status";
+
 struct CommsConfig {
   // *********** Device configuration
   // Both device host name and MQTT client id  
@@ -101,6 +103,7 @@ unsigned int otaProgress;
 unsigned long mqttActivity;
 bool mqttDisableCallback = false;
 char mqttServerAddress[32]="";
+bool commsHAConnected=false;
 
 WiFiClient wifiClient;
 PubSubClient mqttClient( wifiClient );
@@ -310,6 +313,10 @@ void mqttCallbackProxy(char* topic, byte* payload, unsigned int length) {
   if( mqttIsTopic( topic, TOPIC_Reset ) ) {
     aePrintln(F("MQTT: Resetting by request"));
     commsClearTopicAndRestart( TOPIC_Reset );
+  } else if( strcmp(topic, TOPIC_HA_Status) == 0) {
+      if ((payload != NULL) && (length > 3) && (length < 63)) {
+          commsHAConnected = ( strncmp( (const char*)payload, "online", 6) == 0 );
+      }
   } else if( mqttIsTopic( topic, TOPIC_FactoryReset ) ) {
     aePrintln(F("MQTT: Resetting settings"));
     storageReset();
@@ -345,6 +352,15 @@ void mqttCallbackProxy(char* topic, byte* payload, unsigned int length) {
     commsEnableOTA();
   }
   
+}
+
+//**************************************************************************
+//                            Home Assistant support
+//**************************************************************************
+bool haConnected() {
+  if( !wifiConnected() ) return false;
+  if( !mqttConnected() ) return false;
+  return commsHAConnected;
 }
 
 //**************************************************************************
@@ -445,6 +461,7 @@ void commsLoop() {
 
 
     } else {
+      commsHAConnected = false;
       if( wasConnected ) {
         aePrintln(F("MQTT: Connection lost"));
         wasConnected = false;
@@ -506,6 +523,7 @@ void commsLoop() {
           mqttSubscribeTopic( TOPIC_Reset );
           mqttSubscribeTopic( TOPIC_FactoryReset );
           mqttSubscribeTopic( TOPIC_EnableOTA );
+          mqttSubscribeTopicRaw( TOPIC_HA_Status );
 #ifndef WIFI_HostName
           mqttSubscribeTopic( TOPIC_SetName );
 #endif  
@@ -522,7 +540,7 @@ void commsLoop() {
           sprintf( willTopic, "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
           mqttPublish( TOPIC_Address, willTopic, true  );
           mqttPublish( TOPIC_Broker, mqttServerAddress, true );
-
+          
           for(int i=0; i<mqttCbsCount; i++ ) {
             if( mqttCbs[i].connect != NULL ) mqttCbs[i].connect();
           }
@@ -546,6 +564,7 @@ void commsLoop() {
     }
 
   } else {
+    commsHAConnected = false;
     if( (unsigned long)(t - commsConnecting) > COMMS_ConnectTimeout ) {
       aePrint(F("WIFI: Connection error #")); aePrintln(WiFi.status());
       commsReconnect();
